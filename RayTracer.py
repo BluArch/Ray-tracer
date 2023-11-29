@@ -1,5 +1,6 @@
 import sys
 import numpy as np
+import matplotlib.pyplot as plt
 
 near = None
 left = None
@@ -9,23 +10,23 @@ top = None
 
 resolution = []
 background_color = np.array([])
-ambient = np.array([])
+ambient = []
 spheres = []
 lights = []
 output_name = None
 
-
 class Sphere:
-    def __init__(self, name, position, scale, color, coefficients, shine):
+    def __init__(self, name: str, position: list, scale: list, color: list, coefficients: list, shine: float):
         self.name = name
         self.position = np.array(position)
         self.scale = np.array(scale)
+        
         self.color = np.array(color)
         self.coefficients = np.array(coefficients)
         self.shine = shine
 
 class Light:
-    def __init__(self, name, position, color):
+    def __init__(self, name: str, position: list, color: list):
         self.name = name
         self.position = np.array(position)
         self.color = np.array(color)
@@ -49,11 +50,9 @@ def parse_info():
     
     for line in file:
         values = line.split()
-
         # If current line is empty, skip it
         if not values:
             continue
-        
         # Continue parsing
         if (values[0] == "NEAR"):
             near = float(values[1])
@@ -68,117 +67,89 @@ def parse_info():
         elif (values[0] == "RES"):
             resolution = [int(values[1]), int(values[2])]
         elif (values[0] == "SPHERE"):
-            spheres.append(Sphere(str(values[1]), 
-                                (float(values[2]), float(values[3]), float(values[4])), 
-                                (float(values[5]), float(values[6]), float(values[7])),
-                                (float(values[8]), float(values[9]), float(values[10])),
-                                (float(values[11]), float(values[12]), float(values[13]), float(values[14])),
-                                 float(values[15])))
+            spheres.append(Sphere(str(values[1]), [float(values[2]), float(values[3]), float(values[4])], [float(values[5]), float(values[6]), float(values[7])],[float(values[8]), float(values[9]), float(values[10])], [float(values[11]), float(values[12]), float(values[13]), float(values[14])], float(values[15])))
         elif (values[0] == "LIGHT"):
-            lights.append(Light(str(values[1]),
-                        (float(values[2]), float(values[3]), float(values[4])), 
-                        (float(values[5]), float(values[6]), float(values[7]))))
+            lights.append(Light(str(values[1]), [float(values[2]), float(values[3]), float(values[4])], [float(values[5]), float(values[6]), float(values[7])]))
         elif (values[0] == "BACK"):
             background_color = np.array([float(values[1]), float(values[2]), float(values[3])])
         elif (values[0] == "AMBIENT"):
-            ambient = np.array([float(values[1]), float(values[2]), float(values[3])])
+            ambient = [float(values[1]), float(values[2]), float(values[3])]
         elif (values[0] == "OUTPUT"):
             output_name = str(values[1])
 
-def output_ppm(filename, image):
-    with open(filename, 'w') as output:
 
-        output.write(f'P3\n{resolution[0]} {resolution[1]}\n255\n')
-        # Write the pixel values in text format
-        for column in range(resolution[0]):
-            for row in range(resolution[1]):
-                pixel = image[row, column]
-                output.write(f'{pixel[0]} {pixel[1]} {pixel[2]} ')
+def normalize(vector):
+    return vector / np.linalg.norm(vector)
 
-            # Add a newline after each row
-            output.write('\n')
 
 def raytrace(currentRay: Ray):
-    # if (currentRay.depth > 3):
-    #     return np.array([0,0,0])
-    intersect = closest_intersect(currentRay, spheres)
-    if intersect is not None:
-        return intersect.color
-        print("intersect made, setting color to current sphere color")
-    else:
+    if (currentRay.depth > 3):
+        return np.array([0,0,0])
+    closest_object, closest_distance = find_closest_intersection(currentRay)
+    if (closest_object is None):
         return background_color
-
-def closest_intersect(currentRay: Ray, spheres_list):
-    # closest_intersect = float("inf")
-    # closest_sphere: Ray
-    count = 1
-    for sphere in spheres_list:
-        # print("printing sphere " + str(count))
-        eye_minus_center = currentRay.eye - sphere.position
-
-        # Calculate A,B,C values
-        A = np.dot(currentRay.direction, currentRay.direction)
-        B = 2.0 * np.dot(currentRay.direction, eye_minus_center)
-        C = np.dot(eye_minus_center, eye_minus_center) - 1
-
-        # Solve for the discriminant, 
-        discriminant = B**2 - (A*C)
-        if (discriminant < 0 or discriminant == 0):
-            return None
-        discriminant = np.sqrt(B**2 - (A*C))
-
-        t1 = (-B/A) + (discriminant/A)
-        t2 = (-B/A) - (discriminant/A)
-
-        if (t1>0):
-            return sphere
-        if (t2>0):
-            return sphere
-        count=+1
-    return None
+    return closest_object.color
     
+def find_closest_intersection(curr_ray):
+    # Keep track of closest object and the distance to it
+    closest_object = None
+    closest_distince = np.inf
+    for curr_sphere in spheres:
+        t = find_intersection(curr_ray, curr_sphere)
+        if (t and t<closest_distince):
+            closest_distince = t
+            closest_object = curr_sphere
+    return closest_object, closest_distince
+
+def find_intersection(curr_ray: Ray, sphere: Sphere):
+    eye_minus_center = curr_ray.eye - sphere.position
+
+    a = np.dot(curr_ray.direction, curr_ray.direction)
+    b = 2 * np.dot(curr_ray.direction, eye_minus_center)
+    c = np.linalg.norm(eye_minus_center)**2 - 1
+
+    discriminant = b**2 - 4*a*c
+    print(discriminant)
+    if(discriminant>0):
+        t1 = (-b + np.sqrt(discriminant)) / (a*2)
+        t2 = (-b - np.sqrt(discriminant)) / (a*2)
+        if (t1>0 and t2>0):
+            return min(t1, t2)
+    else:
+        return None
+
 
 def main():
     parse_info()
-
     # For image plane settup
+    eye = np.array([0,0,near])
+    ratio = float(resolution[0])/resolution[1]
+    screen = (left, top/ratio, right, bottom/ratio)
+
     W = resolution[1]/2
     H = resolution[0]/2
 
-    eye = np.array([0,0,-5])
-    lookat = np.array([0,0,0])
-    up = np.array([0,1,0])
-
-    # Basis vector n
-    N = eye - lookat
-    n = eye / np.linalg.norm(N)
-    # Basis vector u
-    U = np.cross(up, n)
-    u = U / np.linalg.norm(U)
-    # Basis vector v
-    v = np.cross(n, u)
-
-    image = np.zeros((resolution[1], resolution[0], 3), dtype=np.uint8)
-
+    # Fill out an empty canvas
+    image = np.zeros((resolution[1], resolution[0], 3))
     for pixel_column in range(resolution[0]):
         for pixel_row in range(resolution[1]):
-            # Finding lower left uc and vr values in camera coordinate system
+            # # Finding lower left uc and vr values in camera coordinate system
             uc = -W + (W * (2*pixel_column)/(resolution[0]))
             vr = -H + (H * (2*pixel_row)/(resolution[1]))
-
             # Pixel in image plane relative to camera coordinate system
-            pixel_in_camera = eye - near*n + uc*u + vr*v
-
+            pixel = np.array([uc,vr,0])
+            ray_shot = normalize(pixel-eye)
             # Create current ray
-            curr_ray = Ray(eye, pixel_in_camera - eye, 0)
+            curr_ray = Ray(eye, ray_shot,0)
             curr_ray.set_depth(1)
-
             # curr_pixel_color = raytrace()
             colorCR = raytrace(curr_ray)
+            # clamp between 0 and 1
+            # scale by 255
             color = colorCR * 255
-            image[pixel_row, pixel_column] = color  # Set current pixel color
-
-    output_ppm(output_name, image)
+            # Set current pixel color
+            image[pixel_row, pixel_column] = np.clip(color,0,1)
+    plt.imsave(output_name, image)
 
 
 if __name__ == "__main__":
