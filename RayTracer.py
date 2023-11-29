@@ -95,28 +95,28 @@ def find_closest_intersection(curr_ray):
     closest_object = None
     closest_distince = np.inf
     for curr_sphere in spheres:
-        t = find_intersection(curr_ray, curr_sphere)
+        eye_minus_center = curr_ray.eye - curr_sphere.position
+
+        a = np.dot(curr_ray.direction, curr_ray.direction)
+        b = 2 * np.dot(curr_ray.direction, eye_minus_center)
+        c = np.linalg.norm(eye_minus_center)**2 - 1
+
+        discriminant = b**2 - 4*a*c
+        if(discriminant>0):
+            t1 = (-b + np.sqrt(discriminant)) / (a*2)
+            t2 = (-b - np.sqrt(discriminant)) / (a*2)
+            if (t1>0 and t2>0):
+                t = min(t1, t2)
+            if (t1>0):
+                t = t1
+            else:
+                t = t2
+        else:
+            t = None
         if (t and t<closest_distince):
             closest_distince = t
             closest_object = curr_sphere
     return closest_object, closest_distince
-
-def find_intersection(curr_ray: Ray, sphere: Sphere):
-    eye_minus_center = curr_ray.eye - sphere.position
-
-    a = np.dot(curr_ray.direction, curr_ray.direction)
-    b = 2 * np.dot(curr_ray.direction, eye_minus_center)
-    c = np.linalg.norm(eye_minus_center)**2 - 1
-
-    discriminant = b**2 - 4*a*c
-    print(discriminant)
-    if(discriminant>0):
-        t1 = (-b + np.sqrt(discriminant)) / (a*2)
-        t2 = (-b - np.sqrt(discriminant)) / (a*2)
-        if (t1>0 and t2>0):
-            return min(t1, t2)
-    else:
-        return None
 
 
 def main():
@@ -126,29 +126,15 @@ def main():
     ratio = float(resolution[0])/resolution[1]
     screen = (left, top/ratio, right, bottom/ratio)
 
-    W = resolution[1]/2
-    H = resolution[0]/2
-
-    # Fill out an empty canvas
     image = np.zeros((resolution[1], resolution[0], 3))
-    for pixel_column in range(resolution[0]):
-        for pixel_row in range(resolution[1]):
-            # # Finding lower left uc and vr values in camera coordinate system
-            uc = -W + (W * (2*pixel_column)/(resolution[0]))
-            vr = -H + (H * (2*pixel_row)/(resolution[1]))
-            # Pixel in image plane relative to camera coordinate system
-            pixel = np.array([uc,vr,0])
-            ray_shot = normalize(pixel-eye)
-            # Create current ray
-            curr_ray = Ray(eye, ray_shot,0)
-            curr_ray.set_depth(1)
-            # curr_pixel_color = raytrace()
-            colorCR = raytrace(curr_ray)
-            # clamp between 0 and 1
-            # scale by 255
-            color = colorCR * 255
-            # Set current pixel color
-            image[pixel_row, pixel_column] = np.clip(color,0,1)
+    for i, y in enumerate(np.linspace(screen[1], screen[3], resolution[1])):
+        for j, x in enumerate(np.linspace(screen[0], screen[2], resolution[0])):
+            pixel = np.array([x,y,0])
+            origin = eye
+            direction = normalize(pixel - origin)
+
+            color = raytrace(Ray(eye, direction, 1))
+            image[i, j] = np.clip(color, 0, 1)
     plt.imsave(output_name, image)
 
 
