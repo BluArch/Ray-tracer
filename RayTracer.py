@@ -7,15 +7,17 @@ left = None
 right = None
 bottom = None
 top = None
-
+output_name = None
 resolution = []
-background_color = np.array([])
 ambient = []
 spheres = []
 lights = []
-output_name = None
+background_color = np.array([])
 
 class Sphere:
+    """
+    Class stores the values of a sphere in the scene
+    """
     def __init__(self, name: str, position: list, scale: list, color: list, coefficients: list, shine: float):
         self.name = name
         self.position = np.array(position)
@@ -27,12 +29,18 @@ class Sphere:
         self.shine = shine
 
 class Light:
+    """
+    Class stores the values of a light in the scene
+    """
     def __init__(self, name: str, position: list, color: list):
         self.name = name
         self.position = np.array(position)
         self.color = np.array(color)
 
 class Ray:
+    """
+    Class stores the values of a ray in the scene. Depth of the ray can be updated with set_depth
+    """
     def __init__(self, eye, direction, depth):
         self.eye = np.array(eye)
         self.direction = np.array(direction)
@@ -42,8 +50,9 @@ class Ray:
         self.depth = new_depth
 
 def parse_info():
-    # Takes input from command line for the variables of the scene
-    # Will create objects for Lights and Spheres
+    """
+    Takes input from command line and stores values in variables and objects of the scene
+    """
     global near, left, right, bottom, top, resolution, spheres, lights, background_color, ambient, output_name
 
     testcaseFile = sys.argv[1]  
@@ -80,13 +89,22 @@ def parse_info():
 
 
 def normalize(vector):
+    """
+    Function normalizes a given vector and returns the normalized vector
+    """
     return vector / np.linalg.norm(vector)
 
 def inverse_by_scale(vector, scale):
+    """
+    Function computes the dot product of a vector and a matrix, scales the vector by the inverse of the scaling matrix
+    """
     inverse_scale =  np.linalg.inv(scale)
     return np.dot(vector, inverse_scale)
 
 def raytrace(currentRay: Ray):
+    """
+    Raytracing function idk I'll add more context later
+    """
     # If we've reached max depth, return black
     if (currentRay.depth > 3):
         return np.array([0,0,0])
@@ -98,23 +116,27 @@ def raytrace(currentRay: Ray):
     # Calculates intersect point of minimum distance object
     P = currentRay.eye - closest_distance*currentRay.direction
 
-
     return closest_object.color
     
 def find_closest_intersection(curr_ray):
-    # Keep track of closest object and the distance to it
+    """
+    Computes all intersections of a given ray with the objects in the scene.
+    Return the closest object with the distance to the object
+    """
     closest_object = None
     closest_distance = np.inf
+    # Find intersection if it exists for each sphere, update closest_object/distance is closer than current values
     for curr_sphere in spheres:
         eye_minus_center = curr_ray.eye - curr_sphere.position
 
+        # Find the scaled value of the ray and vector from eye to circle center
         curr_ray_inverse = inverse_by_scale(curr_ray.direction, curr_sphere.scale)
         eye_center_inverse = inverse_by_scale(eye_minus_center, curr_sphere.scale)
 
         a = np.dot(curr_ray_inverse, curr_ray_inverse)
         b = 2 * np.dot(curr_ray_inverse, eye_center_inverse)
         c = np.linalg.norm(eye_center_inverse)**2 - 1
-
+        # Find the number of intersections
         discriminant = b**2 - 4*a*c
         if(discriminant>0):
             discriminant = np.sqrt(discriminant)
@@ -122,12 +144,9 @@ def find_closest_intersection(curr_ray):
             t2 = (-b - discriminant) / (a*2)
             if (t1>0 and t2>0):
                 t = min(t1, t2)
-            if (t1>0):
-                t = t1
-            else:
-                t = t2
         else:
             t = None
+        # Update values if closer
         if (t and t<closest_distance):
             closest_distance = t
             closest_object = curr_sphere
@@ -135,19 +154,24 @@ def find_closest_intersection(curr_ray):
 
 
 def main():
+    """
+    main function idk
+    """
     parse_info()
-    # For image plane settup
+    # Set up eye and image
     eye = np.array([0,0,near])
     image = np.zeros((resolution[1], resolution[0], 3))
 
+    # Iterate through every pixel of the image
     for pixel_column in range(resolution[1]):
         for pixel_row in range(resolution[0]):
+            # Get pixel value in camera coordinates
             uc = left + (right*(2*pixel_column)/(resolution[1]))
             vr = top + (bottom*(2*pixel_row)/(resolution[0]))
-
+            # Get direction of camera to pixel
             pixel = np.array([uc,vr,0])
             direction = normalize(pixel - eye)
-
+            # Raytrace on current pixel and update pixel color
             color = raytrace(Ray(eye, direction, 1))
             image[pixel_row, pixel_column] = np.clip(color, 0, 1)
     plt.imsave(output_name, image)
