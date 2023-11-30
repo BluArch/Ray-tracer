@@ -19,8 +19,9 @@ class Sphere:
     def __init__(self, name: str, position: list, scale: list, color: list, coefficients: list, shine: float):
         self.name = name
         self.position = np.array(position)
-        self.scale = np.array(scale)
-        
+        self.scale = np.array([[scale[0], 0, 0],
+                              [0, scale[1], 0],
+                              [0, 0, scale[2]]])
         self.color = np.array(color)
         self.coefficients = np.array(coefficients)
         self.shine = shine
@@ -81,30 +82,44 @@ def parse_info():
 def normalize(vector):
     return vector / np.linalg.norm(vector)
 
+def inverse_by_scale(vector, scale):
+    inverse_scale =  np.linalg.inv(scale)
+    return np.dot(vector, inverse_scale)
 
 def raytrace(currentRay: Ray):
+    # If we've reached max depth, return black
     if (currentRay.depth > 3):
         return np.array([0,0,0])
+    # Search for whether there is a closest object to intersect with
     closest_object, closest_distance = find_closest_intersection(currentRay)
+    # If no object, return background color
     if (closest_object is None):
         return background_color
+    # Calculates intersect point of minimum distance object
+    P = currentRay.eye - closest_distance*currentRay.direction
+
+
     return closest_object.color
     
 def find_closest_intersection(curr_ray):
     # Keep track of closest object and the distance to it
     closest_object = None
-    closest_distince = np.inf
+    closest_distance = np.inf
     for curr_sphere in spheres:
         eye_minus_center = curr_ray.eye - curr_sphere.position
 
-        a = np.dot(curr_ray.direction, curr_ray.direction)
-        b = 2 * np.dot(curr_ray.direction, eye_minus_center)
-        c = np.linalg.norm(eye_minus_center)**2 - 1
+        curr_ray_inverse = inverse_by_scale(curr_ray.direction, curr_sphere.scale)
+        eye_center_inverse = inverse_by_scale(eye_minus_center, curr_sphere.scale)
+
+        a = np.dot(curr_ray_inverse, curr_ray_inverse)
+        b = 2 * np.dot(curr_ray_inverse, eye_center_inverse)
+        c = np.linalg.norm(eye_center_inverse)**2 - 1
 
         discriminant = b**2 - 4*a*c
         if(discriminant>0):
-            t1 = (-b + np.sqrt(discriminant)) / (a*2)
-            t2 = (-b - np.sqrt(discriminant)) / (a*2)
+            discriminant = np.sqrt(discriminant)
+            t1 = (-b + discriminant) / (a*2)
+            t2 = (-b - discriminant) / (a*2)
             if (t1>0 and t2>0):
                 t = min(t1, t2)
             if (t1>0):
@@ -113,28 +128,28 @@ def find_closest_intersection(curr_ray):
                 t = t2
         else:
             t = None
-        if (t and t<closest_distince):
-            closest_distince = t
+        if (t and t<closest_distance):
+            closest_distance = t
             closest_object = curr_sphere
-    return closest_object, closest_distince
+    return closest_object, closest_distance
 
 
 def main():
     parse_info()
     # For image plane settup
     eye = np.array([0,0,near])
-    ratio = float(resolution[0])/resolution[1]
-    screen = (left, top/ratio, right, bottom/ratio)
-
     image = np.zeros((resolution[1], resolution[0], 3))
-    for i, y in enumerate(np.linspace(screen[1], screen[3], resolution[1])):
-        for j, x in enumerate(np.linspace(screen[0], screen[2], resolution[0])):
-            pixel = np.array([x,y,0])
-            origin = eye
-            direction = normalize(pixel - origin)
+
+    for pixel_column in range(resolution[1]):
+        for pixel_row in range(resolution[0]):
+            uc = left + (right*(2*pixel_column)/(resolution[1]))
+            vr = top + (bottom*(2*pixel_row)/(resolution[0]))
+
+            pixel = np.array([uc,vr,0])
+            direction = normalize(pixel - eye)
 
             color = raytrace(Ray(eye, direction, 1))
-            image[i, j] = np.clip(color, 0, 1)
+            image[pixel_row, pixel_column] = np.clip(color, 0, 1)
     plt.imsave(output_name, image)
 
 
