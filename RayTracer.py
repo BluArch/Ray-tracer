@@ -1,6 +1,5 @@
 import sys
 import numpy as np
-import matplotlib.pyplot as plt
 
 near = None
 left = None
@@ -8,11 +7,6 @@ right = None
 bottom = None
 top = None
 output_name = None
-resolution = []
-ambient = np.array([])
-spheres = []
-lights = []
-background_color = np.array([])
 
 class Sphere:
     """
@@ -53,7 +47,13 @@ def parse_info():
     """
     Takes input from command line and stores values in variables and objects of the scene
     """
-    global near, left, right, bottom, top, resolution, spheres, lights, background_color, ambient, output_name
+    global near, left, right, bottom, top, output_name
+
+    spheres = []
+    lights = []
+    ambient = None
+    background_color = None
+    resolution = None
 
     testcaseFile = sys.argv[1]  
     
@@ -86,6 +86,7 @@ def parse_info():
                 ambient = [float(values[1]), float(values[2]), float(values[3])]
             elif (values[0] == "OUTPUT"):
                 output_name = str(values[1])
+        return spheres, lights, ambient, background_color, resolution
 
 
 def normalize(vector: np.array):
@@ -112,64 +113,63 @@ def inverse_transpose(vector: np.array, scale: np.array):
     return result
 
 
-def raytrace(currentRay: Ray):
+def raytrace(currentRay: Ray, objects: list, light_sources: list, ambient_light: list, background: np.array):
     """
-    Raytracing function idk I'll add more context later
+    Function goes through the raytracing process for a given pixel, maximum 3 bounces
     """
     # If we've reached max depth, return black
     if (currentRay.depth > 3):
         return np.array([0,0,0])
     
     # Search for whether there is a closest object to intersect with
-    closest_object, closest_distance = find_closest_intersection(currentRay)
+    closest_object, closest_distance, t_inside = find_closest_intersection(currentRay, objects)
 
     # If no object, return background color
     if (closest_object is None):
-        return background_color
+        return background
     
     P = currentRay.eye + closest_distance*currentRay.direction
-
-    p_normal = inverse_transpose(P-closest_object.position, closest_object.scale)
+    p_normal = P-closest_object.position
+    p_normal = inverse_transpose(p_normal, closest_object.scale)
     p_normal = normalize(p_normal)
     P = P + 0.00001 * p_normal
-
+    if (t_inside == 1):
+        p_normal = -p_normal
+    
     # Compute ambient lighting + lighting from lights
-    clocal = color_from_lights(currentRay.eye, P, p_normal, closest_object)
+    clocal = color_from_lights(currentRay.eye, P, p_normal, closest_object, objects, ambient_light, light_sources, t_inside)
 
     reflected_direction = -2 * np.dot(p_normal, currentRay.direction)*p_normal + currentRay.direction
     reflected_ray = Ray(P, reflected_direction, currentRay.depth + 1)
 
-    colorRE = raytrace(reflected_ray)
-    if np.allclose(colorRE, background_color):
+    colorRE = raytrace(reflected_ray, objects, light_sources, ambient_light, background)
+    if np.allclose(colorRE, background):
         colorRE = np.array([0.0,0.0,0.0])
     pixel_color = clocal + colorRE*closest_object.coefficients[3]
     return pixel_color
     
 
-def color_from_lights(eye: np.array, point: np.array, normal: np.array, object: Sphere):
+def color_from_lights(eye: np.array, point: np.array, normal: np.array, object: Sphere, objects: list, Ka, light_sources: list, tnum):
     """
-    TODO: get this to work
     Function returns the sum of all lighting from lights using ADS model
     """
     # Get vector from eye to point
     point_to_eye = normalize(eye - point)
-    clocal = ambient * object.color * object.coefficients[0]
+    clocal = Ka * object.color * object.coefficients[0]
 
-    for light in lights:
+    for light in light_sources:
         # Get vector to current light from point
         point_to_light = normalize(light.position - point)
         # Convert light ray to Ray object to run find_closest_intersection on it
         light_ray = Ray(point, point_to_light, 0)
 
-        _, closest_distance = find_closest_intersection(light_ray)
+        _, closest_distance, _ = find_closest_intersection(light_ray, objects)
         distance_to_light = np.linalg.norm(light.position - point)
 
-        if (distance_to_light > closest_distance):
+        if (distance_to_light > closest_distance or (tnum == 1 and light.position[2] <-near)):
             continue
-
         # Calculate diffuse value
         diffuse = object.coefficients[1] * light.color * np.dot(normal, point_to_light) * object.color
-
         # Calculate specular value
         R = 2.0*np.dot(normal, point_to_light)*normal - point_to_light
         specular = object.coefficients[2] * light.color * np.dot(R, point_to_eye)**object.shine
@@ -178,26 +178,30 @@ def color_from_lights(eye: np.array, point: np.array, normal: np.array, object: 
     return clocal
 
 
-def find_closest_intersection(curr_ray: Ray):
+def find_closest_intersection(curr_ray: Ray, objects: list):
     """
     Computes all intersections of a given ray with the objects in the scene.
     Return the closest object with the distance to the object
     """
     closest_object = None
     closest_distance = np.inf
+    t_inside = None
     # Find intersection if it exists for each sphere, update closest_object/distance is closer than current values
-    for curr_sphere in spheres:
-        t = getDistance(curr_ray, curr_sphere)
+    for curr_sphere in objects:
+        t, inside = getDistance(curr_ray, curr_sphere)
         # Update values if closer
         if (t and t<closest_distance):
             closest_distance = t
             closest_object = curr_sphere
-    return closest_object, closest_distance
+            t_inside = inside
+    return closest_object, closest_distance, t_inside
 
 def getDistance(ray, sphere):
+    """
+    Function returns the distance to an intersect point if an intersect exists
+    """
     eye_minus_center = ray.eye - sphere.position
-
-    # Find the scaled value of the ray and vector from eye to circle center
+    # Get the scaled value of the ray and vector from eye to circle center
     curr_ray_inverse = inverse_by_scale(ray.direction, sphere.scale)
     eye_center_inverse = inverse_by_scale(eye_minus_center, sphere.scale)
     # Solve for a, b, and c values
@@ -211,31 +215,36 @@ def getDistance(ray, sphere):
         t1 = (-b + discriminant) / (a*2)
         t2 = (-b - discriminant) / (a*2)
         if (t1>0 and t2>0):
-            return min(t1, t2)
-    return None
+            if (t1<=near or t2<=near):
+                return max(t1,t2), 1
+            return min(t1,t2), 0
+    return None, None
 
 def main():
     """
-    Stores variables from .txt file and generates rays to iterate through every pixel of the image plane
+    Stores variables from .txt file and generates rays to iterate through every pixel of the image plane, writing pixel colors to .ppm file
     """
-    parse_info()
+    objects, light_sources, ambient_lights, backgroundC, resolution = parse_info()
 
     eye = np.array([0,0,0])
-    image = np.zeros((resolution[1], resolution[0], 3))
 
-    for pixel_column in range(resolution[1]):
-        for pixel_row in range(resolution[0]):
-           
-            uc = left + (right*(2*pixel_column)/(resolution[1]))
-            vr = top + (bottom*(2*pixel_row)/(resolution[0]))
+    with open(output_name, 'w') as ppm_file:
+        ppm_file.write("P3\n")
+        ppm_file.write(f"{resolution[1]} {resolution[0]}\n")
+        ppm_file.write("255\n")
+        for pixel_row in range(resolution[1]):
+            for pixel_column in range(resolution[0]):
             
-            pixel = np.array([uc,vr,-near])
-            direction = normalize(pixel - eye)
-            
-            color = raytrace(Ray(eye, direction, 1))
-            image[pixel_row, pixel_column] = np.clip(color, 0, 1)
-    plt.imsave(output_name, image)
-
+                uc = left + (right*(2*pixel_column)/(resolution[1]))
+                vr = top + (bottom*(2*pixel_row)/(resolution[0]))
+                
+                pixel = np.array([uc,vr,-near])
+                direction = normalize(pixel - eye)
+                
+                color = raytrace(Ray(eye, direction, 1), objects, light_sources, ambient_lights, backgroundC)
+                scaled_pixel = (color * 255).astype(int)
+                ppm_file.write(f"{scaled_pixel[0]} {scaled_pixel[1]} {scaled_pixel[2]} ")
+            ppm_file.write("\n")
 
 if __name__ == "__main__":
     main()
