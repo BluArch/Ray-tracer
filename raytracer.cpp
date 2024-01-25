@@ -1,11 +1,12 @@
 #include <iostream>
+#include <sstream>
 #include <fstream>
 #include <vector>
 #include <string>
 
 class Matrix{
     public:
-        std::vector<std::vector<int>> matrix;
+        std::vector<std::vector<int> > matrix;
 
     Matrix(int x, int y, int z) : matrix(3, std::vector<int>(3,0)){
         matrix[0][0] = x;
@@ -53,7 +54,7 @@ class Ray{
 };
 
 void read_file(std::string input_file){
-    
+
     std::fstream input;
     input.open(input_file, std::ios::in);
     if(input.is_open()){
@@ -65,9 +66,27 @@ void read_file(std::string input_file){
     input.close();
 }   
 
+std::vector<Sphere> get_Spheres(std::string input_file){
+    std::vector<Sphere> spheres;
+    std::fstream input;
+    input.open(input_file, std::ios::in);
+    if(input.is_open()){
+        std::string line;
+        while(std::getline(input, line)){
+            std::istringstream iss(line);
+            std::string cur_word;
+            while(iss>>cur_word){
+                std::cout<<cur_word<<"\n";
+            }
+        }
+    }
+    input.close();
+    return spheres;
+}
+
 int main(int argc, char* argv[]){
     std::string input_file = argv[1];
-    read_file(input_file);
+    get_Spheres(input_file);
 
     return 0;
 }
