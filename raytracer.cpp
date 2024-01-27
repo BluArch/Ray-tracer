@@ -53,9 +53,13 @@ class Ray{
             eye({x,y,z}), direction({directionx,directiony,directionz}), depth(starting_depth){}
 };
 
-std::array<float,15> store_line(std::string);
+std::array<float,14> store_line(std::string);
 
 void parse_text_file(std::string input_file, std::list<Sphere>& spheres, std::list<Light>& lights){
+/*
+Function takes the name of an text file, opens it and reads each line. The values of the lines are stored in objects
+TODO: Also have it take arrays for the background color, ambient color, and output filename
+*/
     std::string name;
     std::fstream input;
 
@@ -63,7 +67,7 @@ void parse_text_file(std::string input_file, std::list<Sphere>& spheres, std::li
     if(input.is_open()){
         std::string line;
         while(std::getline(input, line)){
-            std::array<float,15> curr_line;
+            std::array<float,14> curr_line;
             curr_line = store_line(line);
             if(curr_line[0]==1.0){
                 spheres.push_back(Sphere(curr_line[1], curr_line[2], curr_line[3],curr_line[4],curr_line[5],curr_line[6],curr_line[7],
@@ -76,9 +80,13 @@ void parse_text_file(std::string input_file, std::list<Sphere>& spheres, std::li
     input.close();
 }
 
-std::array<float,15> store_line(std::string line){
+std::array<float,14> store_line(std::string line){
+/*
+Function takes a string as input and returns an array of every word in the string.
+TODO: have it return the background color, ambient lighting, and output name
+*/
     std::istringstream iss(line);
-    std::array<float,15> curr_line;
+    std::array<float,14> curr_line;
     std::string cur_word;
     float cur_num;
     int index=1;
@@ -103,6 +111,12 @@ std::array<float,15> store_line(std::string line){
 }
 
 int main(int argc, char* argv[]){
+/*
+Will serve as the main function for the raytracer
+TODO: have the intitial for loop for the raytracer in this function
+
+OVERALL TODOS: split up classes and functions into seperate files, it'd be a good way to practice not having everything in one file
+*/
     std::string input_file = argv[1];
     std::list<Sphere> spheres;
     std::list<Light> lights;
