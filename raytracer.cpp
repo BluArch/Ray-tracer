@@ -3,90 +3,109 @@
 #include <fstream>
 #include <vector>
 #include <string>
+#include <list>
+#include <array>
 
 class Matrix{
     public:
-        std::vector<std::vector<int> > matrix;
+        std::vector<std::vector<float> > matrix;
 
-    Matrix(int x, int y, int z) : matrix(3, std::vector<int>(3,0)){
+    Matrix(float x, float y, float z) : matrix(3, std::vector<float>(3,0)){
         matrix[0][0] = x;
         matrix[1][1] = y;
         matrix[2][2] = z;
     }
-    void set_Position(int row, int column, int value){
+    void set_Position(float row, float column, float value){
         matrix[row][column] = value;
     }
 };
 
 class Sphere{
    public:
-        std::string name;
-        std::vector<int> position;
+        std::vector<float> position;
         Matrix scale;
-        std::vector<int> color;
-        std::vector<int> coefficients;
-        std::vector<int> shine;
+        std::vector<float> color;
+        std::vector<float> coefficients;
+        std::vector<float> shine;
 
-        Sphere(std::string new_name, int x, int y, int z, int scalex, int scaley, int scalez,
-                int r, int g, int b, int rA, int rD, int rS, int shine_value) :
-                name(new_name), position({x,y,z}), scale({scalex,scaley,scalez}), color({r,g,b}),
-                coefficients({rA,rD,rS}), shine({shine_value}){}
+        Sphere(float x, float y, float z, float scalex, float scaley, float scalez,
+                float r, float g, float b, float Ka, float Kd, float Ks, float Kr,float shine_value) :
+                position({x,y,z}), scale({scalex,scaley,scalez}), color({r,g,b}),
+                coefficients({Ka,Kd,Ks,Kr}), shine({shine_value}){}
 };
 
 class Light{
     public:
-        std::string name;
-        std::vector<int> position;
-        std::vector<int> color;
+        std::vector<float> position;
+        std::vector<float> color;
 
-        Light(std::string new_name, int x, int y, int z, int r, int g, int b):
-                name(new_name), position({x,y,z}), color({r,g,b}){}
+        Light(float x, float y, float z, float r, float g, float b):
+                position({x,y,z}), color({r,g,b}){}
 };
 
 class Ray{
     public:
-        std::vector<int> eye;
-        std::vector<int> direction;
+        std::vector<float> eye;
+        std::vector<float> direction;
         int depth;
 
-        Ray(int x, int y, int z, int directionx, int directiony, int directionz, int starting_depth) :
+        Ray(float x, float y, float z, float directionx, float directiony, float directionz, float starting_depth) :
             eye({x,y,z}), direction({directionx,directiony,directionz}), depth(starting_depth){}
 };
 
-void read_file(std::string input_file){
+std::array<float,15> store_line(std::string);
 
+void parse_text_file(std::string input_file, std::list<Sphere>& spheres, std::list<Light>& lights){
+    std::string name;
     std::fstream input;
+
     input.open(input_file, std::ios::in);
     if(input.is_open()){
         std::string line;
         while(std::getline(input, line)){
-            std::cout << line << "\n";
-        }
-    }
-    input.close();
-}   
-
-std::vector<Sphere> get_Spheres(std::string input_file){
-    std::vector<Sphere> spheres;
-    std::fstream input;
-    input.open(input_file, std::ios::in);
-    if(input.is_open()){
-        std::string line;
-        while(std::getline(input, line)){
-            std::istringstream iss(line);
-            std::string cur_word;
-            while(iss>>cur_word){
-                std::cout<<cur_word<<"\n";
+            std::array<float,15> curr_line;
+            curr_line = store_line(line);
+            if(curr_line[0]==1.0){
+                spheres.push_back(Sphere(curr_line[1], curr_line[2], curr_line[3],curr_line[4],curr_line[5],curr_line[6],curr_line[7],
+                curr_line[8],curr_line[9],curr_line[10],curr_line[11],curr_line[12],curr_line[13],curr_line[14]));
+            }else if(curr_line[0]==2.0){
+                lights.push_back(Light(curr_line[1],curr_line[2],curr_line[3],curr_line[4],curr_line[5],curr_line[6]));
             }
         }
     }
     input.close();
-    return spheres;
+}
+
+std::array<float,15> store_line(std::string line){
+    std::istringstream iss(line);
+    std::array<float,15> curr_line;
+    std::string cur_word;
+    float cur_num;
+    int index=1;
+
+    iss>>cur_word;
+    // Determining if line stores info for a sphere or a light
+    // TODO: CHECK FOR BACKGROUND COLOR AND AMBIENT COLOR
+    if (cur_word == "SPHERE"){
+        curr_line[0] = 1.0;
+    }else if (cur_word == "LIGHT"){
+        curr_line[0] = 2.0;
+    }else{
+        curr_line[0] = -1.0;
+    }
+    while(iss>>cur_word){
+        if((curr_line[0]==1||curr_line[0]==2)&&index!=1){
+            curr_line[index-1] = std::stof(cur_word);
+        }
+        index++;
+    }
+    return curr_line;
 }
 
 int main(int argc, char* argv[]){
     std::string input_file = argv[1];
-    get_Spheres(input_file);
-
+    std::list<Sphere> spheres;
+    std::list<Light> lights;
+    parse_text_file(input_file, spheres, lights);
     return 0;
 }
